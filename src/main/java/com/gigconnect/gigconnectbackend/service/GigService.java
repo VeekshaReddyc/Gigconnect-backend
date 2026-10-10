@@ -21,7 +21,6 @@ public class GigService {
     private final GigApplicationRepository applicationRepository;
     private final NotificationService notificationService;
 
-    // Fixed constructor: initialize every final field.
     public GigService(
             GigRepository gigRepository,
             UserRepository userRepository,
@@ -59,6 +58,96 @@ public class GigService {
         gig.setPaidAt(null);
 
         return gigRepository.save(gig);
+    }
+
+    // Update a client's own draft gig
+    @Transactional
+    public Gig updateGig(
+            Long gigId,
+            Long clientId,
+            Gig updatedGig) {
+
+        Gig gig = getGigOrThrow(gigId);
+
+        verifyClientOwnership(gig, clientId);
+
+        if (!"DRAFT".equalsIgnoreCase(gig.getStatus())) {
+            throw new RuntimeException(
+                    "Only draft gigs can be edited");
+        }
+
+        if (updatedGig.getTitle() == null
+                || updatedGig.getTitle().isBlank()) {
+            throw new RuntimeException("Gig title is required");
+        }
+
+        if (updatedGig.getDescription() == null
+                || updatedGig.getDescription().isBlank()) {
+            throw new RuntimeException("Gig description is required");
+        }
+
+        if (updatedGig.getDescription().length() > 2000) {
+            throw new RuntimeException(
+                    "Description cannot exceed 2000 characters");
+        }
+
+        Double minBudget = updatedGig.getMinBudget();
+        Double maxBudget = updatedGig.getMaxBudget();
+
+        if (minBudget != null
+                && (!Double.isFinite(minBudget) || minBudget < 0)) {
+            throw new RuntimeException(
+                    "Minimum budget must be a valid non-negative number");
+        }
+
+        if (maxBudget != null
+                && (!Double.isFinite(maxBudget) || maxBudget < 0)) {
+            throw new RuntimeException(
+                    "Maximum budget must be a valid non-negative number");
+        }
+
+        if (minBudget != null
+                && maxBudget != null
+                && minBudget > maxBudget) {
+            throw new RuntimeException(
+                    "Minimum budget cannot exceed maximum budget");
+        }
+
+        gig.setTitle(updatedGig.getTitle().trim());
+        gig.setDescription(updatedGig.getDescription().trim());
+        gig.setCategory(updatedGig.getCategory());
+        gig.setSkills(updatedGig.getSkills());
+        gig.setMinBudget(minBudget);
+        gig.setMaxBudget(maxBudget);
+        gig.setDeadline(updatedGig.getDeadline());
+        gig.setExperience(updatedGig.getExperience());
+
+        return gigRepository.save(gig);
+    }
+
+    // Delete a client's own draft or published gig
+    @Transactional
+    public void deleteGig(Long gigId, Long clientId) {
+
+        Gig gig = getGigOrThrow(gigId);
+
+        verifyClientOwnership(gig, clientId);
+
+        String status = gig.getStatus();
+
+        if (!"DRAFT".equalsIgnoreCase(status)
+                && !"PUBLISHED".equalsIgnoreCase(status)) {
+            throw new RuntimeException(
+                    "Only draft or published gigs can be deleted");
+        }
+
+        // Protect application records.
+        if (!applicationRepository.findByGigId(gigId).isEmpty()) {
+            throw new RuntimeException(
+                    "This gig has applications and cannot be deleted");
+        }
+
+        gigRepository.delete(gig);
     }
 
     // Publish a draft gig

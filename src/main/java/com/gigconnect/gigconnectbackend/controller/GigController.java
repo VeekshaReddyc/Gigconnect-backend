@@ -5,6 +5,7 @@ import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -58,6 +59,49 @@ public class GigController {
 
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(gigService.createGig(gig, clientId));
+
+        } catch (RuntimeException e) {
+            return errorResponse(e);
+        }
+    }
+
+    // Update a client's own draft gig
+    @PutMapping("/{gigId}")
+    public ResponseEntity<?> updateGig(
+            @PathVariable Long gigId,
+            @RequestParam Long clientId,
+            @RequestBody(required = false) Gig updatedGig) {
+        try {
+            if (updatedGig == null) {
+                return badRequest("Gig details are required.");
+            }
+
+            if (isBlank(updatedGig.getTitle())) {
+                return badRequest("Gig title is required.");
+            }
+
+            if (isBlank(updatedGig.getDescription())) {
+                return badRequest("Gig description is required.");
+            }
+
+            return ResponseEntity.ok(
+                    gigService.updateGig(gigId, clientId, updatedGig));
+
+        } catch (RuntimeException e) {
+            return errorResponse(e);
+        }
+    }
+
+    // Delete a client's own draft or published gig
+    @DeleteMapping("/{gigId}")
+    public ResponseEntity<?> deleteGig(
+            @PathVariable Long gigId,
+            @RequestParam Long clientId) {
+        try {
+            gigService.deleteGig(gigId, clientId);
+
+            return ResponseEntity.ok(
+                    Map.of("message", "Gig deleted successfully"));
 
         } catch (RuntimeException e) {
             return errorResponse(e);
